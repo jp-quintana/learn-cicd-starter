@@ -19,18 +19,13 @@ jobs:
       - name: Check for committed sensitive credentials 🛡️
         run: |
           echo "Running git diff to check for sensitive data..."
-          # Use 'git diff' to check if any files were modified/created that shouldn't be
-          # This will fail the job if the diff is not empty (i.e., if sensitive data was leaked)
-          # Note: HEAD is the latest commit, so git diff will show any *uncommitted* changes.
-          # If the secret was exposed via the build process (which is less common), 
-          # you'd check for specific files. For general safety, we check the source dir.
           if git diff --exit-code; then
             echo "Security check passed: No uncommitted changes found."
           else
             echo "::error::Security check FAILED! Uncommitted changes found. Check for accidentally added credentials in source code (e.g., .env not in .gitignore)."
             exit 1
           fi
-      # ----------------------------------------------------
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
