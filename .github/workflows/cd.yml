@@ -9,14 +9,35 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
 
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
     steps:
       - name: Check out code
         uses: actions/checkout@v4
 
+      - name: Check for committed sensitive credentials 🛡️
+        run: |
+          echo "Running git diff to check for sensitive data..."
+          # Use 'git diff' to check if any files were modified/created that shouldn't be
+          # This will fail the job if the diff is not empty (i.e., if sensitive data was leaked)
+          # Note: HEAD is the latest commit, so git diff will show any *uncommitted* changes.
+          # If the secret was exposed via the build process (which is less common), 
+          # you'd check for specific files. For general safety, we check the source dir.
+          if git diff --exit-code; then
+            echo "Security check passed: No uncommitted changes found."
+          else
+            echo "::error::Security check FAILED! Uncommitted changes found. Check for accidentally added credentials in source code (e.g., .env not in .gitignore)."
+            exit 1
+          fi
+      # ----------------------------------------------------
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.25.1'
+
+      - name: Install Goose CLI
+        run: go install github.com/pressly/goose/v3/cmd/goose@latest
 
       - name: Run build script
         run: scripts/buildprod.sh
@@ -34,6 +55,9 @@ jobs:
 
       - name: Create and submit image
         run: gcloud builds submit --tag us-central1-docker.pkg.dev/notely-473221/notely-ar-repo/notely:latest .
+
+      - name: Run migration script
+        run: scripts/migrateup.sh
 
       - name: Deploy to Cloud Run
         run: gcloud run deploy notely --image us-central1-docker.pkg.dev/notely-473221/notely-ar-repo/notely:latest --region us-central1 --allow-unauthenticated --project notely-473221 --max-instances=4
